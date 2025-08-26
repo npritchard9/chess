@@ -1,0 +1,3 @@
+(library
+ (name chess)
+ (libraries core))
