@@ -26,25 +26,23 @@ let create_map () =
 
 let parse_fen fen =
   let m = create_map () in
+  let set_bit k idx m =
+    Map.update m k
+      ~f:
+        (Option.value_map ~default:0L ~f:(fun piece ->
+             Int64.(piece lxor (1L lsl idx))))
+  in
   let rec read s rank file m =
     match s with
     | [] -> m
     | c :: rest -> (
         match c with
         | '/' -> read rest Int64.(rank - 1L) 1L m
-        | '8' -> read rest rank file m
         | n when Char.is_digit n ->
             read rest rank Int64.(file + (of_string @@ String.of_char c)) m
         | p when Char.is_alpha p ->
             let idx = Int64.((rank * 8L) - file) |> Int.of_int64_exn in
-            Map.update m p
-              ~f:
-                (Option.value_map ~default:0L ~f:(fun piece ->
-                     Int64.(piece lxor (1L lsl idx))))
-            |> Fn.flip Map.update '.'
-                 ~f:
-                   (Option.value_map ~default:0L ~f:(fun board ->
-                        Int64.(board lxor (1L lsl idx))))
+            set_bit p idx m |> set_bit '.' idx
             |> read rest rank Int64.(file + 1L)
         | _ -> failwith "unknown input")
   in
