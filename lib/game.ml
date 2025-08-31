@@ -1,5 +1,10 @@
 open Core
 
+(*
+need to have a way to handle the starting pos for a move so i can clear it out when a piece moves
+also need to handle valid moves
+*)
+
 let default_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
 let bk_long_castle = 61
 let bk_short_castle = 57
@@ -23,6 +28,8 @@ let create ?(fen = default_fen) () =
     turn = `White;
     winner = None;
   }
+
+let get_pawn_type game = match game.turn with `White -> 'P' | `Black -> 'p'
 
 let parse_square sq =
   match String.to_array sq with
@@ -48,7 +55,7 @@ let parse_move game move =
       let first_char = String.get move 0 in
       if String.exists piece_ids ~f:(Char.equal first_char) then
         (first_char, parse_square square)
-      else ('p', parse_square square)
+      else (get_pawn_type game, parse_square square)
       (*Nxd4 | bxc6 pawn uses file *)
   | _checkmate when String.exists move ~f:(Char.equal '#') ->
       let first_char = String.get move 0 in
@@ -58,7 +65,7 @@ let parse_move game move =
       let square = String.suffix get_rid_of_cm 2 in
       if String.exists piece_ids ~f:(Char.equal first_char) then
         (first_char, parse_square square)
-      else ('p', parse_square square)
+      else (get_pawn_type game, parse_square square)
       (*Qh4#*)
   | _check when String.exists move ~f:(Char.equal '+') ->
       let first_char = String.get move 0 in
@@ -69,14 +76,15 @@ let parse_move game move =
       let square = String.suffix get_rid_of_ch 2 in
       if String.exists piece_ids ~f:(Char.equal first_char) then
         (first_char, parse_square square)
-      else ('p', parse_square square)
+      else (get_pawn_type game, parse_square square)
       (*Bb5+*)
   | _castle when String.exists move ~f:(Char.equal 'O') ->
       ('k', parse_castle game move) (*O-O*)
   | "1-0" -> ('w', 0 (* white wins *))
   | "0-1" -> ('b', 0 (* black wins *))
   | "1/2-1/2" -> (' ', 0 (* draw *))
-  | _pawn when String.length move = 2 -> ('p', parse_square move (*e4*))
+  | _pawn when String.length move = 2 -> (get_pawn_type game, parse_square move)
+  (*e4*)
   | _same_piece_diff_file
     when String.length move = 4 && (Char.is_alpha @@ String.get move 1) ->
       (String.get move 0, parse_square square) (*Nbd2*)
@@ -90,4 +98,11 @@ let parse_move game move =
 let make_move game move =
   let piece, square = parse_move game move in
   printf "%c, %d\n" piece square;
-  ()
+  let set_bit k idx m =
+    Map.update m k
+      ~f:
+        (Option.value_map ~default:0L ~f:(fun piece ->
+             Int64.(piece lxor (1L lsl idx))))
+  in
+  let bitboards = set_bit piece square game.bitboards in
+  { game with bitboards }
