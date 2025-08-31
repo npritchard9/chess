@@ -7,8 +7,16 @@ also need to handle valid moves
 
 let default_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
 let rank2 = 0x000000000000FF00L
-let not_a_file = 0xfefefefefefefefeL
-let not_h_file = 0x7f7f7f7f7f7f7f7fL
+let a_file = 0x8080808080808080L
+let b_file = 0x4040404040404040L
+let g_file = 0x0202020202020202L
+let h_file = 0x0101010101010101L
+let not_a_file = Int64.lnot a_file
+let not_h_file = Int64.lnot h_file
+let not_ab_file = Int64.(lnot (a_file lor b_file))
+let not_gh_file = Int64.(lnot (g_file lor h_file))
+
+(* need to handle rook moving on castles too *)
 let bk_long_castle = 61
 let bk_short_castle = 57
 let wk_long_castle = 6
@@ -34,6 +42,21 @@ let create ?(fen = default_fen) () =
 
 let get_pawn_type game = match game.turn with `White -> 'P' | `Black -> 'p'
 let is_bit_set bitboard square = Int64.((1L lsl square) land bitboard <> 0L)
+
+let int64_to_board n =
+  let rec loop i s =
+    if i < 0 then s
+    else
+      loop (i - 1)
+        (s
+        ^
+        match (is_bit_set n i, i mod 8 = 0) with
+        | true, true -> "1\n"
+        | true, false -> "1"
+        | false, true -> "0\n"
+        | _ -> "0")
+  in
+  loop 63 "\n"
 
 let parse_square sq =
   match String.to_array sq with
@@ -97,26 +120,46 @@ let parse_move game move =
       (String.get move 0, parse_square square) (*N1d2*)
   | _move -> (String.get move 0, parse_square square)
 
-let gen_wp_moves game =
+let gen_pawn_moves game =
+  let pawn, opp_key =
+    match game.turn with `White -> ('P', '0') | `Black -> ('p', '1')
+  in
   let board = Map.find_exn game.bitboards '.' in
-  let wp = Map.find_exn game.bitboards 'P' in
-  let black = Map.find_exn game.bitboards '0' in
+  let pawns = Map.find_exn game.bitboards pawn in
+  let opp = Map.find_exn game.bitboards opp_key in
   let empty = Int64.lnot board in
 
-  let wp_single = Int64.((wp lsl 8) land empty) in
-  let wp_rank_2 = Int64.(wp land rank2) in
-  let wp_single_targets = Int64.((wp_rank_2 lsl 8) land empty) in
-  let wp_double = Int64.((wp_single_targets lsl 8) land empty) in
-  let wp_can_cap_left = Int64.(wp land not_a_file) in
-  let wp_cap_left = Int64.((wp_can_cap_left lsl 9) land black) in
-  let wp_can_cap_right = Int64.(wp land not_h_file) in
-  let wp_cap_right = Int64.((wp_can_cap_right lsl 7) land black) in
-  (*check bit orders again ig*)
-  Int64.(wp_single lor wp_double lor wp_cap_left lor wp_cap_right)
+  let single = Int64.((pawns lsl 8) land empty) in
+  let rank_2 = Int64.(pawns land rank2) in
+  let single_targets = Int64.((rank_2 lsl 8) land empty) in
+  let double = Int64.((single_targets lsl 8) land empty) in
+  let can_cap_left = Int64.(pawns land not_a_file) in
+  let cap_left = Int64.((can_cap_left lsl 9) land opp) in
+  let can_cap_right = Int64.(pawns land not_h_file) in
+  let cap_right = Int64.((can_cap_right lsl 7) land opp) in
+  Int64.(single lor double lor cap_left lor cap_right)
+
+let gen_knight_moves game =
+  let knight, color =
+    match game.turn with `White -> ('N', '1') | `Black -> ('n', '0')
+  in
+  let knights = Map.find_exn game.bitboards knight in
+  let pieces = Map.find_exn game.bitboards color in
+  let open_squares = Int64.lnot pieces in
+  let m1 = Int64.((knights land not_gh_file) lsl 6) in
+  let m2 = Int64.((knights land not_ab_file) lsl 10) in
+  let m3 = Int64.((knights land not_h_file) lsl 15) in
+  let m4 = Int64.((knights land not_a_file) lsl 17) in
+  let m5 = Int64.((knights land not_ab_file) lsr 6) in
+  let m6 = Int64.((knights land not_gh_file) lsr 10) in
+  let m7 = Int64.((knights land not_a_file) lsr 15) in
+  let m8 = Int64.((knights land not_h_file) lsr 17) in
+  let all_moves = Int64.(m1 lor m2 lor m3 lor m4 lor m5 lor m6 lor m7 lor m8) in
+  Int64.(all_moves land open_squares)
 
 let make_move game move =
   let piece, square = parse_move game move in
-  let valid_wp_moves = gen_wp_moves game in
+  let valid_wp_moves = gen_pawn_moves game in
   let is_valid = is_bit_set valid_wp_moves square in
   printf "valid: %b\n" is_valid;
   printf "%c, %d\n" piece square;
