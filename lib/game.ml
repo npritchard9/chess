@@ -33,6 +33,7 @@ let create ?(fen = default_fen) () =
   }
 
 let get_pawn_type game = match game.turn with `White -> 'P' | `Black -> 'p'
+let is_bit_set bitboard square = Int64.((1L lsl square) land bitboard <> 0L)
 
 let parse_square sq =
   match String.to_array sq with
@@ -96,22 +97,6 @@ let parse_move game move =
       (String.get move 0, parse_square square) (*N1d2*)
   | _move -> (String.get move 0, parse_square square)
 
-let make_move game move =
-  let piece, square = parse_move game move in
-  printf "%c, %d\n" piece square;
-  let set_bit k idx m =
-    Map.update m k
-      ~f:
-        (Option.value_map ~default:0L ~f:(fun piece ->
-             Int64.(piece lxor (1L lsl idx))))
-  in
-  let color = match game.turn with `White -> '1' | `Black -> '0' in
-  let bitboards =
-    set_bit piece square game.bitboards
-    |> set_bit color square |> set_bit '.' square
-  in
-  { game with bitboards }
-
 let gen_wp_moves game =
   let board = Map.find_exn game.bitboards '.' in
   let wp = Map.find_exn game.bitboards 'P' in
@@ -128,3 +113,22 @@ let gen_wp_moves game =
   let wp_cap_right = Int64.((wp_can_cap_right lsl 7) land black) in
   (*check bit orders again ig*)
   Int64.(wp_single lor wp_double lor wp_cap_left lor wp_cap_right)
+
+let make_move game move =
+  let piece, square = parse_move game move in
+  let valid_wp_moves = gen_wp_moves game in
+  let is_valid = is_bit_set valid_wp_moves square in
+  printf "valid: %b\n" is_valid;
+  printf "%c, %d\n" piece square;
+  let set_bit k idx m =
+    Map.update m k
+      ~f:
+        (Option.value_map ~default:0L ~f:(fun piece ->
+             Int64.(piece lxor (1L lsl idx))))
+  in
+  let color = match game.turn with `White -> '1' | `Black -> '0' in
+  let bitboards =
+    set_bit piece square game.bitboards
+    |> set_bit color square |> set_bit '.' square
+  in
+  { game with bitboards }
