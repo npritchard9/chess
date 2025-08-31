@@ -6,6 +6,9 @@ also need to handle valid moves
 *)
 
 let default_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+let rank2 = 0x000000000000FF00L
+let not_a_file = 0xfefefefefefefefeL
+let not_h_file = 0x7f7f7f7f7f7f7f7fL
 let bk_long_castle = 61
 let bk_short_castle = 57
 let wk_long_castle = 6
@@ -91,9 +94,7 @@ let parse_move game move =
   | _same_piece_diff_rank
     when String.length move = 4 && (Char.is_digit @@ String.get move 1) ->
       (String.get move 0, parse_square square) (*N1d2*)
-  | _move ->
-      printf "making normal move\n";
-      (String.get move 0, parse_square square)
+  | _move -> (String.get move 0, parse_square square)
 
 let make_move game move =
   let piece, square = parse_move game move in
@@ -104,5 +105,26 @@ let make_move game move =
         (Option.value_map ~default:0L ~f:(fun piece ->
              Int64.(piece lxor (1L lsl idx))))
   in
-  let bitboards = set_bit piece square game.bitboards in
+  let color = match game.turn with `White -> '1' | `Black -> '0' in
+  let bitboards =
+    set_bit piece square game.bitboards
+    |> set_bit color square |> set_bit '.' square
+  in
   { game with bitboards }
+
+let gen_wp_moves game =
+  let board = Map.find_exn game.bitboards '.' in
+  let wp = Map.find_exn game.bitboards 'P' in
+  let black = Map.find_exn game.bitboards '0' in
+  let empty = Int64.lnot board in
+
+  let wp_single = Int64.((wp lsl 8) land empty) in
+  let wp_rank_2 = Int64.(wp land rank2) in
+  let wp_single_targets = Int64.((wp_rank_2 lsl 8) land empty) in
+  let wp_double = Int64.((wp_single_targets lsl 8) land empty) in
+  let wp_can_cap_left = Int64.(wp land not_a_file) in
+  let wp_cap_left = Int64.((wp_can_cap_left lsl 9) land black) in
+  let wp_can_cap_right = Int64.(wp land not_h_file) in
+  let wp_cap_right = Int64.((wp_can_cap_right lsl 7) land black) in
+  (*check bit orders again ig*)
+  Int64.(wp_single lor wp_double lor wp_cap_left lor wp_cap_right)

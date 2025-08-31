@@ -20,6 +20,10 @@ let create_map () =
     ('B', 0L);
     ('N', 0L);
     ('P', 0L);
+    ('1', 0L);
+    (* white *)
+    ('0', 0L);
+    (* black *)
     ('.', 0L);
   ]
   |> Map.of_alist_exn (module Char)
@@ -42,7 +46,8 @@ let parse_fen fen =
             read rest rank Int64.(file + (of_string @@ String.of_char c)) m
         | p when Char.is_alpha p ->
             let idx = Int64.((rank * 8L) - file) |> Int.of_int64_exn in
-            set_bit p idx m |> set_bit '.' idx
+            let color = if Char.is_uppercase p then '1' else '0' in
+            set_bit p idx m |> set_bit color idx |> set_bit '.' idx
             |> read rest rank Int64.(file + 1L)
         | _ -> failwith "unknown input")
   in
