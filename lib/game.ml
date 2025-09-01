@@ -6,7 +6,14 @@ also need to handle valid moves
 *)
 
 let default_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+let rank1 = 0x00000000000000FFL
 let rank2 = 0x000000000000FF00L
+let rank7 = 0x00FF000000000000L
+let rank8 = 0xFF00000000000000L
+let not_rank_1 = Int64.lnot rank1
+let not_rank_2 = Int64.lnot rank2
+let not_rank_7 = Int64.lnot rank7
+let not_rank_8 = Int64.lnot rank8
 let a_file = 0x8080808080808080L
 let b_file = 0x4040404040404040L
 let g_file = 0x0202020202020202L
@@ -120,9 +127,20 @@ let parse_move game move =
       (String.get move 0, parse_square square) (*N1d2*)
   | _move -> (String.get move 0, parse_square square)
 
+let rec slide src shift shift_fn mask acc own_pieces opp_pieces =
+  let shifted = Int64.(shift_fn (src land mask) shift) in
+  if Int64.(shifted = 0L) then acc
+  else
+    let acc = Int64.(acc lor shifted) in
+    if Int64.(shifted land own_pieces <> 0L) then acc
+    else if Int64.(shifted land opp_pieces <> 0L) then acc
+    else slide shifted shift shift_fn mask acc own_pieces opp_pieces
+
 let gen_pawn_moves game =
-  let pawn, opp_key =
-    match game.turn with `White -> ('P', '0') | `Black -> ('p', '1')
+  let pawn, opp_key, starting_rank =
+    match game.turn with
+    | `White -> ('P', '0', rank2)
+    | `Black -> ('p', '1', rank7)
   in
   let board = Map.find_exn game.bitboards '.' in
   let pawns = Map.find_exn game.bitboards pawn in
@@ -130,8 +148,8 @@ let gen_pawn_moves game =
   let empty = Int64.lnot board in
 
   let single = Int64.((pawns lsl 8) land empty) in
-  let rank_2 = Int64.(pawns land rank2) in
-  let single_targets = Int64.((rank_2 lsl 8) land empty) in
+  let on_starting_rank = Int64.(pawns land starting_rank) in
+  let single_targets = Int64.((on_starting_rank lsl 8) land empty) in
   let double = Int64.((single_targets lsl 8) land empty) in
   let can_cap_left = Int64.(pawns land not_a_file) in
   let cap_left = Int64.((can_cap_left lsl 9) land opp) in
@@ -156,6 +174,49 @@ let gen_knight_moves game =
   let m8 = Int64.((knights land not_h_file) lsr 17) in
   let all_moves = Int64.(m1 lor m2 lor m3 lor m4 lor m5 lor m6 lor m7 lor m8) in
   Int64.(all_moves land open_squares)
+
+let gen_bishop_moves game =
+  let bishop, color, opp_color =
+    match game.turn with `White -> ('B', '1', '0') | `Black -> ('b', '0', '1')
+  in
+  let own_pieces = Map.find_exn game.bitboards color in
+  let opp_pieces = Map.find_exn game.bitboards opp_color in
+  let bishops = Map.find_exn game.bitboards bishop in
+  let ne = slide bishops 7 Int64.( lsl ) not_h_file 0L own_pieces opp_pieces in
+  let nw = slide bishops 9 Int64.( lsl ) not_a_file 0L own_pieces opp_pieces in
+  let se = slide bishops 9 Int64.( lsr ) not_h_file 0L own_pieces opp_pieces in
+  let sw = slide bishops 7 Int64.( lsr ) not_a_file 0L own_pieces opp_pieces in
+  Int64.(ne lor nw lor se lor sw)
+
+let gen_rook_moves game =
+  let rook, color, opp_color =
+    match game.turn with `White -> ('R', '1', '0') | `Black -> ('r', '0', '1')
+  in
+  let own_pieces = Map.find_exn game.bitboards color in
+  let opp_pieces = Map.find_exn game.bitboards opp_color in
+  let rooks = Map.find_exn game.bitboards rook in
+  let n = slide rooks 8 Int64.( lsl ) not_rank_8 0L own_pieces opp_pieces in
+  let s = slide rooks 8 Int64.( lsr ) not_rank_1 0L own_pieces opp_pieces in
+  let e = slide rooks 1 Int64.( lsl ) not_a_file 0L own_pieces opp_pieces in
+  let w = slide rooks 1 Int64.( lsr ) not_h_file 0L own_pieces opp_pieces in
+  Int64.(n lor s lor e lor w)
+
+let gen_queen_moves game =
+  let queen, color, opp_color =
+    match game.turn with `White -> ('Q', '1', '0') | `Black -> ('q', '0', '1')
+  in
+  let own_pieces = Map.find_exn game.bitboards color in
+  let opp_pieces = Map.find_exn game.bitboards opp_color in
+  let queen = Map.find_exn game.bitboards queen in
+  let n = slide queen 8 Int64.( lsl ) not_rank_8 0L own_pieces opp_pieces in
+  let s = slide queen 8 Int64.( lsr ) not_rank_1 0L own_pieces opp_pieces in
+  let e = slide queen 1 Int64.( lsl ) not_a_file 0L own_pieces opp_pieces in
+  let w = slide queen 1 Int64.( lsr ) not_h_file 0L own_pieces opp_pieces in
+  let ne = slide queen 7 Int64.( lsl ) not_h_file 0L own_pieces opp_pieces in
+  let nw = slide queen 9 Int64.( lsl ) not_a_file 0L own_pieces opp_pieces in
+  let se = slide queen 9 Int64.( lsr ) not_h_file 0L own_pieces opp_pieces in
+  let sw = slide queen 7 Int64.( lsr ) not_a_file 0L own_pieces opp_pieces in
+  Int64.(n lor s lor e lor w lor ne lor nw lor se lor sw)
 
 let make_move game move =
   let piece, square = parse_move game move in
