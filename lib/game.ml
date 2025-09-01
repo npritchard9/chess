@@ -218,21 +218,38 @@ let gen_queen_moves game =
   let sw = slide queen 7 Int64.( lsr ) not_a_file 0L own_pieces opp_pieces in
   Int64.(n lor s lor e lor w lor ne lor nw lor se lor sw)
 
+let gen_king_moves game =
+  printf "%b\n" @@ snd game.castling_rights;
+  Int64.zero
+
+let get_gen_move_fn piece =
+  match Char.lowercase piece with
+  | 'k' -> gen_king_moves
+  | 'q' -> gen_queen_moves
+  | 'r' -> gen_rook_moves
+  | 'b' -> gen_bishop_moves
+  | 'n' -> gen_knight_moves
+  | 'p' -> gen_pawn_moves
+  | _ -> failwith "invalid piece"
+
 let make_move game move =
   let piece, square = parse_move game move in
-  let valid_wp_moves = gen_pawn_moves game in
-  let is_valid = is_bit_set valid_wp_moves square in
-  printf "valid: %b\n" is_valid;
-  printf "%c, %d\n" piece square;
-  let set_bit k idx m =
-    Map.update m k
-      ~f:
-        (Option.value_map ~default:0L ~f:(fun piece ->
-             Int64.(piece lxor (1L lsl idx))))
-  in
-  let color = match game.turn with `White -> '1' | `Black -> '0' in
-  let bitboards =
-    set_bit piece square game.bitboards
-    |> set_bit color square |> set_bit '.' square
-  in
-  { game with bitboards }
+  let valid_moves = game |> get_gen_move_fn piece in
+  let is_valid = is_bit_set valid_moves square in
+  match is_valid with
+  | false -> game
+  | true ->
+      printf "valid: %b\n" is_valid;
+      printf "%c, %d\n" piece square;
+      let set_bit k idx m =
+        Map.update m k
+          ~f:
+            (Option.value_map ~default:0L ~f:(fun piece ->
+                 Int64.(piece lxor (1L lsl idx))))
+      in
+      let color = match game.turn with `White -> '1' | `Black -> '0' in
+      let bitboards =
+        set_bit piece square game.bitboards
+        |> set_bit color square |> set_bit '.' square
+      in
+      { game with bitboards }
