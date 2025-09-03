@@ -246,15 +246,13 @@ let get_gen_move_fn piece =
   | 'p' -> gen_pawn_moves
   | _ -> failwith "invalid piece"
 
-let make_move game move =
+let make_move move game =
   let piece, square = parse_move game move in
   let valid_moves = game |> get_gen_move_fn piece in
   let is_valid = is_bit_set valid_moves square in
   match is_valid with
   | false -> game
   | true ->
-      printf "valid: %b\n" is_valid;
-      printf "%c, %d\n" piece square;
       let set_bit k idx m =
         Map.update m k
           ~f:

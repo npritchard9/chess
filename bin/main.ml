@@ -8,7 +8,7 @@ let () =
   let board = Map.find_exn game.bitboards '.' in
   printf "board: %Ld\n" board;
   printf "board as string: %s\n" @@ Game.int64_to_board board;
-  (* let game = Game.make_move game "Kc4" in *)
+  let game = Game.make_move "e4" game |> Game.make_move "e5" in
   let board = Map.find_exn game.bitboards '.' in
   printf "board: %Ld\n" board;
   printf "board as string: %s\n" @@ Game.int64_to_board board;
