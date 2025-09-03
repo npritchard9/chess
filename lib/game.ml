@@ -219,8 +219,22 @@ let gen_queen_moves game =
   Int64.(n lor s lor e lor w lor ne lor nw lor se lor sw)
 
 let gen_king_moves game =
-  printf "%b\n" @@ snd game.castling_rights;
-  Int64.zero
+  let king, color =
+    match game.turn with `White -> ('K', '1') | `Black -> ('k', '0')
+  in
+  let king = Map.find_exn game.bitboards king in
+  let pieces = Map.find_exn game.bitboards color in
+  let open_squares = Int64.lnot pieces in
+  let m1 = Int64.((king land not_a_file) lsl 1) in
+  let m2 = Int64.((king land not_h_file land not_rank_8) lsl 7) in
+  let m3 = Int64.((king land not_rank_8) lsl 8) in
+  let m4 = Int64.((king land not_a_file land not_rank_8) lsl 9) in
+  let m5 = Int64.((king land not_h_file) lsr 1) in
+  let m6 = Int64.((king land not_a_file land not_rank_1) lsr 7) in
+  let m7 = Int64.((king land not_rank_1) lsr 8) in
+  let m8 = Int64.((king land not_h_file land not_rank_1) lsr 9) in
+  let all_moves = Int64.(m1 lor m2 lor m3 lor m4 lor m5 lor m6 lor m7 lor m8) in
+  Int64.(all_moves land open_squares)
 
 let get_gen_move_fn piece =
   match Char.lowercase piece with
