@@ -25,9 +25,13 @@ let not_gh_file = Int64.(lnot (g_file lor h_file))
 
 (* need to handle rook moving on castles too *)
 let bk_long_castle = 61
+let br_long_castle = 60
 let bk_short_castle = 57
-let wk_long_castle = 6
+let br_long_castle = 58
+let wk_long_castle = 5
+let wr_long_castle = 4
 let wk_short_castle = 1
+let wr_short_castle = 2
 
 type color = [ `White | `Black ]
 type board_map = (char, int64, Base.Char.comparator_witness) Map_intf.Map.t

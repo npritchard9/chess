@@ -21,9 +21,7 @@ let create_map () =
     ('N', 0L);
     ('P', 0L);
     ('1', 0L);
-    (* white *)
     ('0', 0L);
-    (* black *)
     ('.', 0L);
   ]
   |> Map.of_alist_exn (module Char)
